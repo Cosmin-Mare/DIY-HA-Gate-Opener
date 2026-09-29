@@ -1,0 +1,213 @@
+# ESPHome config for HW-625B (ESP-12F / ESP8266) driving a
+# TETRIX CRServo 39177 (continuous-rotation servo) on D7 / GPIO13.
+#
+# NOTE: The CRServo has no position feedback — it's speed/direction only,
+# like a PWM-controlled motor. This exposes a -100..100 "speed" slider to
+# Home Assistant: negative = reverse, 0 = stop, positive = forward.
+#
+# It also adds a "Bump" button that spins forward for a calculated time,
+# then spins back for a calculated time, to move roughly N degrees and
+# return. Since there's no position sensor, this is pure dead-reckoning
+# (speed x time), and this servo's speed response is very non-linear (see
+# the deadband note on the Bump DPS entities below) -- so degrees, speed,
+# AND the deg/sec calibration for each direction are ALL exposed as their
+# own number entities in Home Assistant. That way you can retune any of
+# it live without reflashing.
+#
+# Put this file in your ESPHome dashboard (or `esphome/` folder on your
+# server) and fill in your wifi credentials below before flashing.
+
+esphome:
+  name: crservo-controller
+  friendly_name: CR Servo Controller
+
+esp8266:
+  board: esp12e   # matches ESP-12F modules (HW-625B, same as your IR blaster)
+
+# Logging over serial/OTA
+logger:
+
+# Home Assistant native API (no encryption key = unencrypted, fine on a home LAN)
+api:
+
+ota:
+  - platform: esphome
+    # no password = anyone on your network could push new firmware to this
+    # device; fine on a home network you control, add a password later if needed
+
+wifi:
+  ssid: "YOUR_WIFI_SSID"
+  password: "YOUR_WIFI_PASSWORD"
+
+  # No fallback hotspot configured — if it can't reach your wifi, you'll need
+  # a USB cable to reflash it rather than connecting to a temporary AP.
+  # (Add an `ap:` block back later if you want that safety net.)
+
+# --- Servo signal output ---
+output:
+  - platform: esp8266_pwm
+    id: crservo_pwm
+    pin: GPIO13          # D7 on the HW-625B silkscreen
+    frequency: 50 Hz      # standard hobby-servo PWM rate
+
+servo:
+  - id: crservo
+    output: crservo_pwm
+    # IMPORTANT: ESPHome's servo component smooths speed changes over
+    # transition_length (default 1s!) instead of applying them instantly.
+    # That's fine for the manual 1s-long calibration tests, but it wrecks
+    # the short "bump" pulses -- the servo never reaches full commanded
+    # speed before the next write() cuts in, unevenly between the forward
+    # and reverse legs. Setting this to 0 makes write() apply immediately.
+    transition_length: 0s
+    # Standard 500-2400us pulse range expressed as % of the 20ms period.
+    # Tetrix CRServo generally follows standard servo timing, but if full
+    # speed feels weak/asymmetric or it doesn't fully stop at "0", nudge
+    # these slightly (e.g. idle_level 7.4% / 7.6%) until it sits still
+    # at 0 and spins evenly in both directions.
+    min_level: 3%          # ~600us  -> full reverse
+    idle_level: 7.5%        # ~1500us -> stop
+    max_level: 12%          # ~2400us -> full forward
+    # No auto_detach: keep the PWM signal held so the servo holds "stop"
+    # firmly instead of free-spinning when the signal is released.
+
+# --- Home Assistant control: -100 (full reverse) .. 0 (stop) .. 100 (full forward) ---
+number:
+  - platform: template
+    name: "CR Servo Speed"
+    id: crservo_speed
+    icon: mdi:rotate-3d-variant
+    min_value: -100
+    max_value: 100
+    step: 1
+    initial_value: 0
+    restore_value: false   # starts at stop after reboot/power loss, for safety
+    optimistic: true
+    on_value:
+      then:
+        - lambda: |-
+            id(crservo).write(x / 100.0);
+
+  # --- Bump tuning, all live-editable from Home Assistant, all restored ---
+  # --- across reboots. "mode: box" gives a numeric entry field instead   ---
+  # --- of a slider, so you can type exact values like 1.5.              ---
+
+  # How far the "Bump" button moves it, in degrees (estimated), each way
+  - platform: template
+    name: "Bump Degrees Forward"
+    id: bump_deg_fwd
+    icon: mdi:angle-acute
+    mode: box
+    min_value: 0
+    max_value: 180
+    step: 0.1
+    initial_value: 15
+    restore_value: true
+    optimistic: true
+
+  - platform: template
+    name: "Bump Degrees Backward"
+    id: bump_deg_rev
+    icon: mdi:angle-acute
+    mode: box
+    min_value: 0
+    max_value: 180
+    step: 0.1
+    initial_value: 5
+    restore_value: true
+    optimistic: true
+
+  # Speed (% of full, always positive here -- direction is fixed by which
+  # leg it drives) used for each leg of the bump move
+  - platform: template
+    name: "Bump Speed Forward"
+    id: bump_speed_fwd
+    icon: mdi:speedometer
+    mode: box
+    min_value: 1
+    max_value: 100
+    step: 0.5
+    initial_value: 18
+    restore_value: true
+    optimistic: true
+
+  - platform: template
+    name: "Bump Speed Backward"
+    id: bump_speed_rev
+    icon: mdi:speedometer
+    mode: box
+    min_value: 1
+    max_value: 100
+    step: 0.5
+    initial_value: 18
+    restore_value: true
+    optimistic: true
+
+  # Calibration: measured degrees/sec at the Bump Speed above, for each
+  # direction. This servo has a narrow, asymmetric deadband (nothing below
+  # ~5-8%, then rises steeply and unevenly between forward/reverse), so
+  # whenever you change a Bump Speed above, re-measure and update its
+  # matching DPS here (run "CR Servo Speed" at that % for exactly 1 second
+  # and count degrees moved) -- otherwise the timing math will be off.
+  - platform: template
+    name: "Bump DPS Forward"
+    id: bump_dps_fwd
+    icon: mdi:tachometer
+    mode: box
+    min_value: 0.1
+    max_value: 400
+    step: 0.1
+    initial_value: 30
+    restore_value: true
+    optimistic: true
+
+  - platform: template
+    name: "Bump DPS Backward"
+    id: bump_dps_rev
+    icon: mdi:tachometer
+    mode: box
+    min_value: 0.1
+    max_value: 400
+    step: 0.1
+    initial_value: 30
+    restore_value: true
+    optimistic: true
+
+button:
+  # Physical stop button, handy for HA dashboards/automations
+  - platform: template
+    name: "CR Servo Stop"
+    icon: mdi:stop
+    on_press:
+      then:
+        - number.set:
+            id: crservo_speed
+            value: 0
+
+  # Spins forward by "Bump Degrees Forward" at "Bump Speed Forward", pauses,
+  # then spins back by "Bump Degrees Backward" at "Bump Speed Backward" --
+  # all four values read live, so changes in HA take effect immediately.
+  - platform: template
+    name: "Bump"
+    icon: mdi:rotate-right
+    on_press:
+      then:
+        - lambda: |-
+            id(crservo).write(id(bump_speed_fwd).state / 100.0);
+        - delay: !lambda |-
+            float dps = id(bump_dps_fwd).state;
+            float deg = id(bump_deg_fwd).state;
+            if (dps <= 0.0f) return (uint32_t)0;
+            return (uint32_t)(deg / dps * 1000.0f);
+        - lambda: |-
+            id(crservo).write(0.0);
+        - delay: 300ms   # brief settle before reversing
+        - lambda: |-
+            id(crservo).write(-(id(bump_speed_rev).state) / 100.0);
+        - delay: !lambda |-
+            float dps = id(bump_dps_rev).state;
+            float deg = id(bump_deg_rev).state;
+            if (dps <= 0.0f) return (uint32_t)0;
+            return (uint32_t)(deg / dps * 1000.0f);
+        - lambda: |-
+            id(crservo).write(0.0);
