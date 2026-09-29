@@ -136,3 +136,8 @@ ingress:
 ```
 
 Point the hostname at Home Assistant's port (8123 on a default install). The ESPHome device still uses the local API.
+
+
+## Demo
+
+https://github.com/user-attachments/assets/e9069aea-7d2c-4d7b-ab31-095cc686b19b
