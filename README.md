@@ -20,18 +20,11 @@ The firmware is ESPHome. Home Assistant runs on a home server and is published w
 
 ![Battery side of the finished unit](photos/assembled-battery.jpg)
 
-## Parts
+## Bill of materials
 
-| Part | Role |
-| --- | --- |
-| HW-625B (ESP-12F / ESP8266) | Controller. USB for the first flash, then Wi-Fi. |
-| TETRIX CRServo 39177 | Continuous-rotation servo. Signal on D7 / GPIO13. |
-| 18650 cell | Battery. |
-| 1S lithium charger board | Charge input for the cell. |
-| Boost converter with a trim pot | Steps the cell up to 6 V for the ESP and the servo. |
-| Printed case and servo hand | [`cad/remote-arm.stp`](cad/remote-arm.stp) |
-| Superglue | Locks the hand onto the servo axle. |
-| Tape | Holds the wired boards in the case. |
+Links, prices, and what each part does are in [BOM.md](BOM.md). Prices were checked on 30 Sep 2026 and do not include shipping.
+
+One of each part is about **$58**. The ESP board is sold as a pair and the charger as a 10-pack, so buying the listings as they are sold is about **$72**.
 
 ## Wiring
 
