@@ -22,7 +22,7 @@ The firmware is ESPHome. Home Assistant runs on a home server and is published w
 
 ## Bill of materials
 
-Links, prices, and what each part does are in [BOM.md](BOM.md). Prices were checked on 30 Sep 2026 and do not include shipping.
+Links, prices, and what each part does are in [BOM.csv](BOM.csv). Prices were checked on 30 Sep 2026 and do not include shipping.
 
 One of each part is about **$58**. The ESP board is sold as a pair and the charger as a 10-pack, so buying the listings as they are sold is about **$72**.
 
